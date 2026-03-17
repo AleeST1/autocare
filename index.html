@@ -12,7 +12,7 @@
 <title>AutoCare</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
   :root {
@@ -418,7 +418,8 @@ const SUPABASE_URL = 'https://bswgxwglpicdsibwiguc.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_0L4SskrgV0MVjzL5Tf-dDA_AJXsup9c'
 // ================================================================
 
-const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_KEY)
+const { createClient } = supabase
+const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 let db = { vehicle: null, km: 0, kmUpdatedAt: null, logs: [] }
 let currentUser = null
@@ -434,14 +435,14 @@ const TYPES = {
 
 // ── CLOUD ──────────────────────────────────────────────────────
 async function loadFromCloud(userId) {
-  const { data } = await supabase
+  const { data } = await supabaseClient
     .from('user_data').select('data').eq('user_id', userId).single()
   db = data?.data ?? { vehicle: null, km: 0, kmUpdatedAt: null, logs: [] }
 }
 
 async function save() {
   if (!currentUser) return
-  await supabase.from('user_data').upsert(
+  await supabaseClient.from('user_data').upsert(
     { user_id: currentUser.id, data: db, updated_at: new Date().toISOString() },
     { onConflict: 'user_id' }
   )
@@ -450,7 +451,7 @@ async function save() {
 // ── INIT ───────────────────────────────────────────────────────
 async function init() {
   showScreen('loading')
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { session } } = await supabaseClient.auth.getSession()
   if (session) {
     currentUser = session.user
     await loadFromCloud(currentUser.id)
@@ -459,7 +460,7 @@ async function init() {
     showScreen('auth')
   }
 
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
       currentUser = session.user
       await loadFromCloud(currentUser.id)
@@ -516,11 +517,11 @@ async function authSubmit() {
   btn.disabled = true; btn.textContent = '...'
 
   if (authMode === 'login') {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password })
     if (error) { showAuthError('E-mail ou senha incorretos'); btn.disabled = false; btn.textContent = 'ENTRAR' }
   } else {
     if (password.length < 6) { showAuthError('Senha mínima de 6 caracteres'); btn.disabled = false; btn.textContent = 'CRIAR CONTA'; return }
-    const { error } = await supabase.auth.signUp({ email, password })
+    const { error } = await supabaseClient.auth.signUp({ email, password })
     btn.disabled = false; btn.textContent = 'CRIAR CONTA'
     if (error) showAuthError('Erro: ' + error.message)
     else showToast('Conta criada! Verifique seu e-mail ✉️')
@@ -530,14 +531,14 @@ async function authSubmit() {
 async function authMagicLink() {
   const email = document.getElementById('auth-email').value.trim()
   if (!email) { showAuthError('Informe o e-mail primeiro'); return }
-  const { error } = await supabase.auth.signInWithOtp({ email })
+  const { error } = await supabaseClient.auth.signInWithOtp({ email })
   if (error) showAuthError('Erro ao enviar link')
   else showToast('Link enviado para ' + email + ' ✉️')
 }
 
 async function authLogout() {
   if (!confirm('Sair da conta?')) return
-  await supabase.auth.signOut()
+  await supabaseClient.auth.signOut()
 }
 
 // ── SETUP ──────────────────────────────────────────────────────
