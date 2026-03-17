@@ -12,7 +12,11 @@
 <title>AutoCare</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+window._supabaseCreate = createClient
+</script>
+
 <style>
   :root {
     --bg: #0a0a0f;
@@ -389,6 +393,9 @@
     <div class="nav-item"        id="nav-veiculo"   onclick="goTo('veiculo')">  <span class="nav-icon">🚗</span><span class="nav-label">Veículo</span></div>
   </nav>
 </div>
+<script>
+
+</script>
 
 <!-- ODO MODAL -->
 <div class="modal-overlay" id="odo-modal" onclick="closeOdoModal(event)">
@@ -414,7 +421,9 @@ const SUPABASE_URL = 'https://bswgxwglpicdsibwiguc.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_0L4SskrgV0MVjzL5Tf-dDA_AJXsup9c'
 // ================================================================
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+const supabase = window._supabaseCreate 
+  ? window._supabaseCreate(SUPABASE_URL, SUPABASE_KEY)
+  : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
 
 let db = { vehicle: null, km: 0, kmUpdatedAt: null, logs: [] }
 let currentUser = null

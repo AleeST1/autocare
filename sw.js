@@ -1,4 +1,4 @@
-const CACHE = 'autocare-v1';
+const CACHE = 'autocare-v2';
 const ASSETS = [
   '/autocare/',
   '/autocare/index.html',
