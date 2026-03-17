@@ -13,6 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 
 <style>
   :root {
@@ -421,6 +423,42 @@ const SUPABASE_KEY = 'sb_publishable_0L4SskrgV0MVjzL5Tf-dDA_AJXsup9c'
 const { createClient } = supabase
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY)
 
+// ── Firebase / Push ────────────────────────────────────────────
+const VAPID_KEY = 'BP8yfCx8bKN85K9OKuPJvUBcczd0whwyxSQp8ZnBX90wN6-fNLyueAB63fHSDPTZ28XRaESJBS8CavMEV2uks18'
+
+firebase.initializeApp({
+  apiKey: "AIzaSyCmXqVtfJL8hE4xddMZ3jVU6yQTYMNCQc8",
+  authDomain: "manutencar-app.firebaseapp.com",
+  projectId: "manutencar-app",
+  storageBucket: "manutencar-app.firebasestorage.app",
+  messagingSenderId: "955642662931",
+  appId: "1:955642662931:web:b1406d35f5bae6d8b8afe6"
+})
+
+const messaging = firebase.messaging()
+
+async function registerPush(userId) {
+  try {
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return
+
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY })
+    if (!token) return
+
+    // Salva token no Supabase (ignora se já existe)
+    await supabaseClient.from('push_tokens')
+      .upsert({ user_id: userId, token }, { onConflict: 'user_id,token', ignoreDuplicates: true })
+  } catch (e) {
+    console.warn('Push não disponível:', e.message)
+  }
+}
+
+// Recebe notificações com app aberto (foreground)
+messaging.onMessage(payload => {
+  const { title, body } = payload.notification
+  showToast(`${title}: ${body}`)
+})
+
 let db = { vehicle: null, km: 0, kmUpdatedAt: null, logs: [] }
 let currentUser = null
 
@@ -489,6 +527,8 @@ function showApp() {
   if (!db.vehicle) { showScreen('setup'); return }
   showScreen('app')
   renderApp()
+  // Pede permissão de push após login
+  if (currentUser) registerPush(currentUser.id)
 }
 
 // ── AUTH ───────────────────────────────────────────────────────
