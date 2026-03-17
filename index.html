@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AutoCare">
+<meta name="description" content="Log de manutenção do seu veículo">
+<link rel="manifest" href="manifest.json">
+<title>AutoCare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@300;400;600;700;800&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3e;
+    --accent: #e8ff47;
+    --text: #f0f0f8;
+    --muted: #6b6b8a;
+    --ok: #44ff88;
+    --radius: 16px;
+    --radius-sm: 8px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-size: 16px;
+    overflow: hidden;
+  }
+
+  #app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 52px 20px 16px;
+    background: var(--bg);
+    z-index: 10;
+    flex-shrink: 0;
+  }
+  .header-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 28px; letter-spacing: -0.5px; }
+  .header-logo span { color: var(--accent); }
+  .header-car { font-size: 13px; font-family: 'Space Mono', monospace; color: var(--muted); cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .header-car .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+  /* CONTENT */
+  .content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 20px; padding-bottom: calc(80px + var(--safe-bottom)); -webkit-overflow-scrolling: touch; }
+
+  /* PAGES */
+  .page { display: none; animation: fadeIn 0.3s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ODOMETER */
+  .odo-card { background: var(--accent); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; position: relative; overflow: hidden; cursor: pointer; }
+  .odo-card::before { content:''; position:absolute; right:-20px; top:-20px; width:100px; height:100px; border-radius:50%; background:rgba(0,0,0,.08); }
+  .odo-label { font-size: 11px; font-family: 'Space Mono', monospace; color: rgba(0,0,0,.5); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
+  .odo-value { font-family: 'Space Mono', monospace; font-size: 36px; font-weight: 700; color: #0a0a0f; letter-spacing: -1px; }
+  .odo-value span { font-size: 14px; font-weight: 400; margin-left: 4px; }
+  .odo-sub { font-size: 12px; color: rgba(0,0,0,.45); margin-top: 6px; font-family: 'Space Mono', monospace; }
+  .odo-edit-hint { position: absolute; bottom: 16px; right: 16px; font-size: 11px; color: rgba(0,0,0,.4); font-family: 'Space Mono', monospace; }
+
+  /* ALERTS */
+  .section-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; margin-top: 8px; }
+  .alert-card { border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: transform .15s; }
+  .alert-card:active { transform: scale(.98); }
+  .alert-card.danger { background: rgba(255,68,68,.12); border: 1px solid rgba(255,68,68,.3); }
+  .alert-card.warn   { background: rgba(255,170,0,.10); border: 1px solid rgba(255,170,0,.25); }
+  .alert-card.ok     { background: rgba(68,255,136,.07); border: 1px solid rgba(68,255,136,.15); }
+  .alert-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .danger .alert-icon { background: rgba(255,68,68,.2); }
+  .warn   .alert-icon { background: rgba(255,170,0,.2); }
+  .ok     .alert-icon { background: rgba(68,255,136,.15); }
+  .alert-info { flex: 1; }
+  .alert-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 17px; }
+  .alert-desc { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: 'Space Mono', monospace; }
+  .alert-badge { font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; flex-shrink: 0; }
+  .danger .alert-badge { background: rgba(255,68,68,.3); color: #ff8888; }
+  .warn   .alert-badge { background: rgba(255,170,0,.3); color: #ffcc66; }
+  .ok     .alert-badge { background: rgba(68,255,136,.2); color: #88ffbb; }
+
+  /* HISTORY */
+  .filter-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 16px; scrollbar-width: none; }
+  .filter-chips::-webkit-scrollbar { display: none; }
+  .chip { flex-shrink: 0; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; letter-spacing: .5px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; transition: all .2s; }
+  .chip.active { background: var(--accent); color: #0a0a0f; border-color: var(--accent); }
+  .log-item { background: var(--surface); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; display: flex; gap: 14px; align-items: flex-start; border: 1px solid var(--border); transition: transform .15s; position: relative; overflow: hidden; }
+  .log-item::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
+  .log-item.oleo::before     { background: #ffaa00; }
+  .log-item.revisao::before  { background: #4ecdc4; }
+  .log-item.pneu::before     { background: #ff6b35; }
+  .log-item.ipva::before     { background: #a78bfa; }
+  .log-item.outro::before    { background: #6b6b8a; }
+  .log-item:active { transform: scale(.98); }
+  .log-icon { font-size: 22px; margin-top: 2px; }
+  .log-body { flex: 1; }
+  .log-type { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 17px; }
+  .log-note { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .log-meta { display: flex; gap: 12px; margin-top: 8px; }
+  .log-meta-item { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--muted); }
+  .log-cost { font-family: 'Space Mono', monospace; font-size: 13px; color: var(--accent); font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+  .log-delete { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 4px; flex-shrink: 0; }
+
+  /* ADD FORM */
+  .add-form { padding-top: 8px; }
+  .form-section-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; margin-top: 20px; }
+  .form-section-title:first-child { margin-top: 0; }
+  .type-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 4px; }
+  .type-btn { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; transition: all .2s; color: var(--muted); }
+  .type-btn span:first-child { font-size: 22px; }
+  .type-btn span:last-child { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; }
+  .type-btn.selected { background: var(--accent); border-color: var(--accent); color: #0a0a0f; transform: scale(1.03); }
+  .form-group { margin-bottom: 14px; }
+  .form-label { font-size: 12px; font-family: 'Space Mono', monospace; color: var(--muted); margin-bottom: 6px; display: block; }
+  .form-input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 13px 14px; color: var(--text); font-size: 15px; font-family: 'Barlow', sans-serif; outline: none; transition: border-color .2s; -webkit-appearance: none; }
+  .form-input:focus { border-color: var(--accent); }
+  .form-input::placeholder { color: var(--muted); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* BUTTONS */
+  .btn-primary { width: 100%; background: var(--accent); color: #0a0a0f; border: none; border-radius: var(--radius); padding: 16px; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 1px; cursor: pointer; transition: transform .15s,opacity .15s; margin-top: 8px; }
+  .btn-primary:active { transform: scale(.98); opacity: .9; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-secondary { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; cursor: pointer; margin-top: 8px; }
+  .btn-ghost { background: none; border: none; color: var(--muted); font-size: 13px; font-family: 'Space Mono', monospace; cursor: pointer; text-decoration: underline; padding: 6px 0; }
+
+  /* BOTTOM NAV */
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10,10,15,.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; padding: 8px 0; padding-bottom: calc(8px + var(--safe-bottom)); z-index: 100; }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; cursor: pointer; transition: transform .15s; -webkit-tap-highlight-color: transparent; }
+  .nav-item:active { transform: scale(.9); }
+  .nav-icon { font-size: 22px; transition: transform .2s; }
+  .nav-label { font-size: 10px; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); transition: color .2s; }
+  .nav-item.active .nav-label { color: var(--accent); }
+  .nav-item.active .nav-icon { transform: scale(1.1); }
+  .nav-add .nav-icon { width: 44px; height: 44px; background: var(--accent); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #0a0a0f; margin-top: -4px; }
+  .nav-add .nav-label { color: var(--accent); }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200; align-items: flex-end; justify-content: center; backdrop-filter: blur(4px); }
+  .modal-overlay.open { display: flex; animation: fadeIn .2s ease; }
+  .modal { background: var(--surface); border-radius: 24px 24px 0 0; padding: 20px 20px calc(20px + var(--safe-bottom)); width: 100%; max-height: 80vh; overflow-y: auto; animation: slideUp .3s cubic-bezier(.34,1.56,.64,1); border: 1px solid var(--border); border-bottom: none; }
+  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+  .modal-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 22px; margin-bottom: 16px; }
+
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .stat-label { font-size: 11px; font-family: 'Space Mono', monospace; color: var(--muted); margin-bottom: 6px; }
+  .stat-value { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 28px; }
+  .stat-unit { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .bar-chart { margin-bottom: 16px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar-label { font-size: 12px; font-family: 'Space Mono', monospace; color: var(--muted); width: 80px; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 8px; background: var(--surface); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .6s cubic-bezier(.34,1.56,.64,1); }
+  .bar-val { font-family: 'Space Mono', monospace; font-size: 11px; width: 50px; text-align: right; flex-shrink: 0; }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 20px; color: var(--text); margin-bottom: 6px; }
+  .empty-sub { font-size: 14px; line-height: 1.5; }
+
+  /* FULLSCREEN SCREENS */
+  .fullscreen {
+    position: fixed; inset: 0; background: var(--bg); z-index: 999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 32px 28px; text-align: center; overflow-y: auto;
+  }
+  .app-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 56px; letter-spacing: -1px; margin-bottom: 4px; }
+  .app-logo span { color: var(--accent); }
+  .app-tagline { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 32px; }
+  .screen-form { width: 100%; }
+
+  /* AUTH TABS */
+  .auth-tabs { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; margin-bottom: 20px; gap: 4px; }
+  .auth-tab { flex: 1; padding: 10px; border-radius: 6px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; cursor: pointer; border: none; background: none; color: var(--muted); transition: all .2s; }
+  .auth-tab.active { background: var(--accent); color: #0a0a0f; }
+
+  /* AUTH ERROR */
+  .auth-error { display: none; width: 100%; margin-bottom: 12px; background: rgba(255,68,68,.1); border: 1px solid rgba(255,68,68,.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: #ff8888; text-align: left; }
+
+  /* LOADING */
+  #loading-screen { position: fixed; inset: 0; background: var(--bg); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* VEHICLE */
+  .vehicle-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 12px; }
+  .vehicle-info-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .vehicle-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 26px; }
+  .vehicle-plate { font-family: 'Space Mono', monospace; font-size: 13px; background: var(--surface2); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; }
+  .account-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px; font-family: 'Space Mono', monospace; font-size: 12px; color: var(--muted); }
+  .account-chip strong { color: var(--text); display: block; margin-bottom: 2px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: calc(88px + var(--safe-bottom)); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 10px 20px; border-radius: 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; z-index: 300; opacity: 0; transition: all .3s; white-space: nowrap; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="app-logo">Auto<span>Care</span></div>
+  <div class="spinner"></div>
+</div>
+
+<!-- AUTH -->
+<div id="auth-screen" class="fullscreen" style="display:none">
+  <div class="app-logo">Auto<span>Care</span></div>
+  <p class="app-tagline">Nunca mais esqueça a<br>manutenção do seu carro.</p>
+  <div class="screen-form">
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login"    onclick="switchTab('login')">ENTRAR</button>
+      <button class="auth-tab"        id="tab-register" onclick="switchTab('register')">CRIAR CONTA</button>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+    <div class="form-group">
+      <label class="form-label">E-MAIL</label>
+      <input type="email" id="auth-email" class="form-input" placeholder="seu@email.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label class="form-label">SENHA</label>
+      <input type="password" id="auth-password" class="form-input" placeholder="mínimo 6 caracteres" autocomplete="current-password">
+    </div>
+    <button class="btn-primary" id="auth-btn" onclick="authSubmit()">ENTRAR</button>
+    <div style="text-align:center;margin-top:16px;">
+      <button class="btn-ghost" onclick="authMagicLink()">Entrar sem senha (magic link)</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETUP (primeiro acesso) -->
+<div id="setup-screen" class="fullscreen" style="display:none">
+  <div class="app-logo">Auto<span>Care</span></div>
+  <p class="app-tagline">Cadastre seu veículo<br>para começar.</p>
+  <div class="screen-form">
+    <div class="form-group">
+      <label class="form-label">MARCA E MODELO</label>
+      <input type="text" id="setup-model" class="form-input" placeholder="Ex: Honda Civic, Fiat Uno...">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">ANO</label>
+        <input type="number" id="setup-year" class="form-input" placeholder="2020">
+      </div>
+      <div class="form-group">
+        <label class="form-label">PLACA</label>
+        <input type="text" id="setup-plate" class="form-input" placeholder="ABC-1234" style="text-transform:uppercase">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">KM ATUAL</label>
+      <input type="number" id="setup-km" class="form-input" placeholder="45000">
+    </div>
+    <button class="btn-primary" onclick="finishSetup()">COMEÇAR →</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <div class="header">
+    <div class="header-logo">Auto<span>Care</span></div>
+    <div class="header-car" onclick="goTo('veiculo')">
+      <div class="dot"></div>
+      <span id="header-car-name">—</span>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- HOME -->
+    <div id="page-home" class="page active">
+      <div class="odo-card" onclick="showOdoModal()">
+        <div class="odo-label">QUILOMETRAGEM</div>
+        <div class="odo-value" id="odo-display">0 <span>km</span></div>
+        <div class="odo-sub" id="odo-sub">Toque para atualizar</div>
+        <div class="odo-edit-hint">✏️ editar</div>
+      </div>
+      <div class="section-title">ALERTAS</div>
+      <div id="alerts-container"></div>
+    </div>
+
+    <!-- HISTÓRICO -->
+    <div id="page-historico" class="page">
+      <div style="padding-top:8px">
+        <div class="filter-chips">
+          <div class="chip active" onclick="setFilter('todos',this)">Todos</div>
+          <div class="chip" onclick="setFilter('oleo',this)">🛢️ Óleo</div>
+          <div class="chip" onclick="setFilter('revisao',this)">🔧 Revisão</div>
+          <div class="chip" onclick="setFilter('pneu',this)">🔘 Pneus</div>
+          <div class="chip" onclick="setFilter('ipva',this)">📄 IPVA</div>
+          <div class="chip" onclick="setFilter('outro',this)">📝 Outro</div>
+        </div>
+        <div id="log-list"></div>
+      </div>
+    </div>
+
+    <!-- ADD -->
+    <div id="page-add" class="page">
+      <div class="add-form">
+        <div class="form-section-title">TIPO DE MANUTENÇÃO</div>
+        <div class="type-grid">
+          <div class="type-btn selected" data-type="oleo"      onclick="selectType('oleo',this)"><span>🛢️</span><span>Óleo</span></div>
+          <div class="type-btn"          data-type="revisao"   onclick="selectType('revisao',this)"><span>🔧</span><span>Revisão</span></div>
+          <div class="type-btn"          data-type="pneu"      onclick="selectType('pneu',this)"><span>🔘</span><span>Pneus</span></div>
+          <div class="type-btn"          data-type="ipva"      onclick="selectType('ipva',this)"><span>📄</span><span>IPVA</span></div>
+          <div class="type-btn"          data-type="funilaria" onclick="selectType('funilaria',this)"><span>🔨</span><span>Funilaria</span></div>
+          <div class="type-btn"          data-type="outro"     onclick="selectType('outro',this)"><span>📝</span><span>Outro</span></div>
+        </div>
+        <div class="form-section-title">DETALHES</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">DATA</label><input type="date" id="add-date" class="form-input"></div>
+          <div class="form-group"><label class="form-label">KM NA ÉPOCA</label><input type="number" id="add-km" class="form-input" placeholder="45000"></div>
+        </div>
+        <div class="form-group"><label class="form-label">VALOR (R$)</label><input type="number" id="add-cost" class="form-input" placeholder="0,00" step="0.01"></div>
+        <div class="form-group"><label class="form-label">OBSERVAÇÃO</label><input type="text" id="add-note" class="form-input" placeholder="Ex: Castrol 5W30, Mecânica do João..."></div>
+        <div class="form-section-title">PRÓXIMA MANUTENÇÃO</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">PRÓXIMO KM</label><input type="number" id="add-next-km" class="form-input" placeholder="50000"></div>
+          <div class="form-group"><label class="form-label">OU PRÓXIMA DATA</label><input type="date" id="add-next-date" class="form-input"></div>
+        </div>
+        <button class="btn-primary" onclick="saveLog()">SALVAR MANUTENÇÃO</button>
+        <div style="height:10px"></div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div id="page-stats" class="page">
+      <div style="padding-top:8px">
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="section-title">GASTO POR CATEGORIA</div>
+        <div class="bar-chart" id="stats-chart"></div>
+        <div class="section-title" style="margin-top:8px">HISTÓRICO ANUAL</div>
+        <div id="stats-yearly"></div>
+      </div>
+    </div>
+
+    <!-- VEÍCULO -->
+    <div id="page-veiculo" class="page">
+      <div style="padding-top:8px">
+        <div class="vehicle-card" id="vehicle-info-card"></div>
+        <div class="account-chip" id="account-chip"></div>
+        <div class="section-title">EDITAR VEÍCULO</div>
+        <div class="form-group"><label class="form-label">MODELO</label><input type="text" id="edit-model" class="form-input"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">ANO</label><input type="number" id="edit-year" class="form-input"></div>
+          <div class="form-group"><label class="form-label">PLACA</label><input type="text" id="edit-plate" class="form-input" style="text-transform:uppercase"></div>
+        </div>
+        <button class="btn-primary" onclick="saveVehicle()">SALVAR ALTERAÇÕES</button>
+        <button class="btn-secondary" onclick="authLogout()">Sair da conta</button>
+        <button class="btn-secondary" style="color:#ff6666;border-color:rgba(255,68,68,.3)" onclick="confirmReset()">🗑️ Apagar todos os dados</button>
+        <div style="height:20px"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <nav class="bottom-nav">
+    <div class="nav-item active" id="nav-home"      onclick="goTo('home')">     <span class="nav-icon">🏠</span><span class="nav-label">Início</span></div>
+    <div class="nav-item"        id="nav-historico" onclick="goTo('historico')"><span class="nav-icon">📋</span><span class="nav-label">Histórico</span></div>
+    <div class="nav-item nav-add" id="nav-add"      onclick="goTo('add')">      <span class="nav-icon" style="display:flex;align-items:center;justify-content:center">＋</span><span class="nav-label">Registrar</span></div>
+    <div class="nav-item"        id="nav-stats"     onclick="goTo('stats')">    <span class="nav-icon">📊</span><span class="nav-label">Stats</span></div>
+    <div class="nav-item"        id="nav-veiculo"   onclick="goTo('veiculo')">  <span class="nav-icon">🚗</span><span class="nav-label">Veículo</span></div>
+  </nav>
+</div>
+
+<!-- ODO MODAL -->
+<div class="modal-overlay" id="odo-modal" onclick="closeOdoModal(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Atualizar Quilometragem</div>
+    <div class="form-group">
+      <label class="form-label">KM ATUAL</label>
+      <input type="number" id="odo-input" class="form-input" placeholder="45000" style="font-size:24px;font-family:'Space Mono',monospace">
+    </div>
+    <button class="btn-primary" onclick="saveOdo()">ATUALIZAR</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================================================================
+// ⚙️  CONFIGURAÇÃO — substitua pelos valores do seu projeto Supabase
+//     Painel > Settings > API
+// ================================================================
+const SUPABASE_URL = 'https://bswgxwglpicdsibwiguc.supabase.co'
+const SUPABASE_KEY = 'sb_publishable_0L4SskrgV0MVjzL5Tf-dDA_AJXsup9c'
+// ================================================================
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+
+let db = { vehicle: null, km: 0, kmUpdatedAt: null, logs: [] }
+let currentUser = null
+
+const TYPES = {
+  oleo:      { label: 'Troca de Óleo', icon: '🛢️' },
+  revisao:   { label: 'Revisão',        icon: '🔧' },
+  pneu:      { label: 'Pneus',          icon: '🔘' },
+  ipva:      { label: 'IPVA',           icon: '📄' },
+  funilaria: { label: 'Funilaria',      icon: '🔨' },
+  outro:     { label: 'Outro',          icon: '📝' },
+}
+
+// ── CLOUD ──────────────────────────────────────────────────────
+async function loadFromCloud(userId) {
+  const { data } = await supabase
+    .from('user_data').select('data').eq('user_id', userId).single()
+  db = data?.data ?? { vehicle: null, km: 0, kmUpdatedAt: null, logs: [] }
+}
+
+async function save() {
+  if (!currentUser) return
+  await supabase.from('user_data').upsert(
+    { user_id: currentUser.id, data: db, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id' }
+  )
+}
+
+// ── INIT ───────────────────────────────────────────────────────
+async function init() {
+  showScreen('loading')
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) {
+    currentUser = session.user
+    await loadFromCloud(currentUser.id)
+    showApp()
+  } else {
+    showScreen('auth')
+  }
+
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user
+      await loadFromCloud(currentUser.id)
+      showApp()
+    }
+    if (event === 'SIGNED_OUT') {
+      currentUser = null
+      db = { vehicle: null, km: 0, kmUpdatedAt: null, logs: [] }
+      showScreen('auth')
+    }
+  })
+
+  document.getElementById('add-date').value = today()
+}
+
+function today() { return new Date().toISOString().split('T')[0] }
+
+function showScreen(s) {
+  document.getElementById('loading-screen').style.display = s === 'loading' ? 'flex'  : 'none'
+  document.getElementById('auth-screen').style.display    = s === 'auth'    ? 'flex'  : 'none'
+  document.getElementById('setup-screen').style.display   = s === 'setup'   ? 'flex'  : 'none'
+  document.getElementById('app').style.display            = s === 'app'     ? 'flex'  : 'none'
+}
+
+function showApp() {
+  if (!db.vehicle) { showScreen('setup'); return }
+  showScreen('app')
+  renderApp()
+}
+
+// ── AUTH ───────────────────────────────────────────────────────
+let authMode = 'login'
+
+function switchTab(mode) {
+  authMode = mode
+  document.getElementById('tab-login').classList.toggle('active', mode === 'login')
+  document.getElementById('tab-register').classList.toggle('active', mode === 'register')
+  document.getElementById('auth-btn').textContent = mode === 'login' ? 'ENTRAR' : 'CRIAR CONTA'
+  document.getElementById('auth-error').style.display = 'none'
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error')
+  el.textContent = msg; el.style.display = 'block'
+}
+
+async function authSubmit() {
+  const email    = document.getElementById('auth-email').value.trim()
+  const password = document.getElementById('auth-password').value
+  const btn      = document.getElementById('auth-btn')
+  document.getElementById('auth-error').style.display = 'none'
+  if (!email || !password) { showAuthError('Preencha e-mail e senha'); return }
+
+  btn.disabled = true; btn.textContent = '...'
+
+  if (authMode === 'login') {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) { showAuthError('E-mail ou senha incorretos'); btn.disabled = false; btn.textContent = 'ENTRAR' }
+  } else {
+    if (password.length < 6) { showAuthError('Senha mínima de 6 caracteres'); btn.disabled = false; btn.textContent = 'CRIAR CONTA'; return }
+    const { error } = await supabase.auth.signUp({ email, password })
+    btn.disabled = false; btn.textContent = 'CRIAR CONTA'
+    if (error) showAuthError('Erro: ' + error.message)
+    else showToast('Conta criada! Verifique seu e-mail ✉️')
+  }
+}
+
+async function authMagicLink() {
+  const email = document.getElementById('auth-email').value.trim()
+  if (!email) { showAuthError('Informe o e-mail primeiro'); return }
+  const { error } = await supabase.auth.signInWithOtp({ email })
+  if (error) showAuthError('Erro ao enviar link')
+  else showToast('Link enviado para ' + email + ' ✉️')
+}
+
+async function authLogout() {
+  if (!confirm('Sair da conta?')) return
+  await supabase.auth.signOut()
+}
+
+// ── SETUP ──────────────────────────────────────────────────────
+async function finishSetup() {
+  const model = document.getElementById('setup-model').value.trim()
+  if (!model) { showToast('Informe o modelo do veículo'); return }
+  db.vehicle     = { model, year: document.getElementById('setup-year').value, plate: document.getElementById('setup-plate').value.trim().toUpperCase() }
+  db.km          = parseInt(document.getElementById('setup-km').value) || 0
+  db.kmUpdatedAt = new Date().toISOString()
+  db.logs        = []
+  await save()
+  showScreen('app')
+  renderApp()
+  showToast('Veículo cadastrado! 🚗')
+}
+
+// ── NAVIGATION ─────────────────────────────────────────────────
+let currentPage = 'home'
+function goTo(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
+  document.getElementById('page-' + page).classList.add('active')
+  document.getElementById('nav-' + page).classList.add('active')
+  currentPage = page
+  if (page === 'home')      renderHome()
+  if (page === 'historico') renderHistory()
+  if (page === 'stats')     renderStats()
+  if (page === 'veiculo')   renderVehiclePage()
+  if (page === 'add') {
+    document.getElementById('add-date').value    = today()
+    document.getElementById('add-km').value      = db.km || ''
+    document.getElementById('add-next-km').value = document.getElementById('add-next-date').value = ''
+    document.getElementById('add-note').value    = document.getElementById('add-cost').value = ''
+    selectedType = 'oleo'
+    document.querySelectorAll('.type-btn').forEach(b => b.classList.toggle('selected', b.dataset.type === 'oleo'))
+  }
+}
+
+// ── HOME ───────────────────────────────────────────────────────
+function renderApp() { renderHeader(); renderHome() }
+
+function renderHeader() {
+  const name = db.vehicle?.model ?? '—'
+  document.getElementById('header-car-name').textContent = name.length > 14 ? name.slice(0,14)+'…' : name
+}
+
+function renderHome() { renderOdo(); renderAlerts() }
+
+function renderOdo() {
+  document.getElementById('odo-display').innerHTML = `${(db.km||0).toLocaleString('pt-BR')} <span>km</span>`
+  if (db.kmUpdatedAt) document.getElementById('odo-sub').textContent = `Atualizado em ${new Date(db.kmUpdatedAt).toLocaleDateString('pt-BR')}`
+}
+
+function renderAlerts() {
+  const c = document.getElementById('alerts-container')
+  const alerts = computeAlerts()
+  if (!alerts.length) {
+    c.innerHTML = `<div class="empty"><div class="empty-icon">✅</div><div class="empty-title">Tudo em dia!</div><div class="empty-sub">Nenhum alerta no momento.</div></div>`
+    return
+  }
+  c.innerHTML = alerts.map(a => `
+    <div class="alert-card ${a.level}" onclick="goTo('add')">
+      <div class="alert-icon">${a.icon}</div>
+      <div class="alert-info"><div class="alert-name">${a.name}</div><div class="alert-desc">${a.desc}</div></div>
+      <div class="alert-badge">${a.badge}</div>
+    </div>`).join('')
+}
+
+function computeAlerts() {
+  const alerts = [], today = new Date(), km = db.km || 0
+  const lastOf = {}, nextKmOf = {}, nextDateOf = {}
+  ;[...db.logs].sort((a,b) => new Date(a.date)-new Date(b.date)).forEach(l => {
+    lastOf[l.type] = l
+    if (l.nextKm)   nextKmOf[l.type]   = l.nextKm
+    if (l.nextDate) nextDateOf[l.type] = l.nextDate
+  })
+  const defKm = { oleo: 5000, revisao: 10000, pneu: 40000 }
+  ;['oleo','revisao','pneu'].forEach(type => {
+    const last = lastOf[type], t = TYPES[type]
+    const nkm  = nextKmOf[type] || (last ? last.km + defKm[type] : null)
+    const ndt  = nextDateOf[type] ? new Date(nextDateOf[type]) : null
+    if (!last && !nkm) { alerts.push({ level:'warn', icon:t.icon, name:t.label, desc:'Sem registro anterior', badge:'PENDENTE' }); return }
+    if (nkm) {
+      const d = nkm - km
+      if (d <= 0)        alerts.push({ level:'danger', icon:t.icon, name:t.label, desc:`Venceu há ${Math.abs(d).toLocaleString('pt-BR')} km`, badge:'URGENTE' })
+      else if (d <= 1000) alerts.push({ level:'warn',  icon:t.icon, name:t.label, desc:`Faltam ${d.toLocaleString('pt-BR')} km`, badge:'EM BREVE' })
+      else                alerts.push({ level:'ok',    icon:t.icon, name:t.label, desc:`Próxima em ${nkm.toLocaleString('pt-BR')} km`, badge:'OK' })
+    } else if (ndt) {
+      const d = Math.ceil((ndt - today) / 86400000)
+      if (d <= 0)        alerts.push({ level:'danger', icon:t.icon, name:t.label, desc:`Venceu há ${Math.abs(d)} dias`, badge:'URGENTE' })
+      else if (d <= 30)  alerts.push({ level:'warn',   icon:t.icon, name:t.label, desc:`Vence em ${d} dias`, badge:'EM BREVE' })
+      else               alerts.push({ level:'ok',     icon:t.icon, name:t.label, desc:`Próxima em ${ndt.toLocaleDateString('pt-BR')}`, badge:'OK' })
+    }
+  })
+  // IPVA
+  const yr = today.getFullYear(), ipvaLast = lastOf['ipva']
+  if (!ipvaLast || new Date(ipvaLast.date).getFullYear() < yr) {
+    const due = new Date(yr, 2, 31), d = Math.ceil((due - today) / 86400000)
+    if (d < 0)       alerts.push({ level:'danger', icon:'📄', name:'IPVA', desc:`Não registrado em ${yr}`, badge:'URGENTE' })
+    else if (d <= 60) alerts.push({ level:'warn',  icon:'📄', name:'IPVA', desc:`Vence em ${d} dias`, badge:'EM BREVE' })
+    else              alerts.push({ level:'ok',    icon:'📄', name:'IPVA', desc:`Vence em ${due.toLocaleDateString('pt-BR')}`, badge:'OK' })
+  } else alerts.push({ level:'ok', icon:'📄', name:'IPVA', desc:`Pago em ${yr}`, badge:'OK' })
+
+  return alerts.sort((a,b) => ({danger:0,warn:1,ok:2}[a.level] - {danger:0,warn:1,ok:2}[b.level]))
+}
+
+// ── ODO MODAL ──────────────────────────────────────────────────
+function showOdoModal() {
+  document.getElementById('odo-input').value = db.km || ''
+  document.getElementById('odo-modal').classList.add('open')
+  setTimeout(() => document.getElementById('odo-input').focus(), 300)
+}
+function closeOdoModal(e) { if (e.target.id === 'odo-modal') document.getElementById('odo-modal').classList.remove('open') }
+async function saveOdo() {
+  const v = parseInt(document.getElementById('odo-input').value)
+  if (!v || v < 0) { showToast('KM inválido'); return }
+  db.km = v; db.kmUpdatedAt = new Date().toISOString()
+  await save()
+  document.getElementById('odo-modal').classList.remove('open')
+  renderHome(); showToast('KM atualizado!')
+}
+
+// ── ADD LOG ────────────────────────────────────────────────────
+let selectedType = 'oleo'
+function selectType(type, el) {
+  selectedType = type
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'))
+  el.classList.add('selected')
+  const def = { oleo:5000, revisao:10000, pneu:40000 }
+  document.getElementById('add-next-km').value = def[type] && db.km ? db.km + def[type] : ''
+}
+
+async function saveLog() {
+  const date = document.getElementById('add-date').value
+  if (!date) { showToast('Informe a data'); return }
+  const log = {
+    id: Date.now(), type: selectedType, date,
+    km:       parseInt(document.getElementById('add-km').value)   || db.km || 0,
+    cost:     parseFloat(document.getElementById('add-cost').value) || 0,
+    note:     document.getElementById('add-note').value.trim(),
+    nextKm:   parseInt(document.getElementById('add-next-km').value) || null,
+    nextDate: document.getElementById('add-next-date').value || null,
+  }
+  db.logs.unshift(log)
+  if (log.km > db.km) { db.km = log.km; db.kmUpdatedAt = new Date().toISOString() }
+  await save(); showToast('Manutenção salva! ✅'); goTo('home')
+}
+
+// ── HISTORY ────────────────────────────────────────────────────
+let activeFilter = 'todos'
+function setFilter(f, el) {
+  activeFilter = f
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'))
+  el.classList.add('active')
+  renderHistory()
+}
+
+function renderHistory() {
+  const list = document.getElementById('log-list')
+  let logs = [...db.logs]
+  if (activeFilter !== 'todos') logs = logs.filter(l => l.type === activeFilter)
+  logs.sort((a,b) => new Date(b.date) - new Date(a.date))
+  if (!logs.length) { list.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Sem registros</div><div class="empty-sub">Adicione manutenções<br>usando o botão +</div></div>`; return }
+  list.innerHTML = logs.map(log => {
+    const t = TYPES[log.type] || TYPES.outro
+    const d = new Date(log.date + 'T12:00:00')
+    return `<div class="log-item ${log.type}">
+      <div class="log-icon">${t.icon}</div>
+      <div class="log-body">
+        <div class="log-type">${t.label}</div>
+        ${log.note ? `<div class="log-note">${log.note}</div>` : ''}
+        <div class="log-meta">
+          <div class="log-meta-item">📅 ${d.toLocaleDateString('pt-BR')}</div>
+          <div class="log-meta-item">📍 ${log.km.toLocaleString('pt-BR')} km</div>
+        </div>
+      </div>
+      ${log.cost > 0 ? `<div class="log-cost">R$${log.cost.toFixed(2).replace('.',',')}</div>` : ''}
+      <button class="log-delete" onclick="deleteLog(${log.id})">🗑</button>
+    </div>`
+  }).join('')
+}
+
+async function deleteLog(id) {
+  if (!confirm('Remover este registro?')) return
+  db.logs = db.logs.filter(l => l.id !== id)
+  await save(); renderHistory(); showToast('Removido')
+}
+
+// ── STATS ──────────────────────────────────────────────────────
+function renderStats() {
+  const logs = db.logs, yr = new Date().getFullYear()
+  const total = logs.reduce((s,l) => s+(l.cost||0), 0)
+  const yLogs = logs.filter(l => new Date(l.date).getFullYear() === yr)
+  const yTotal = yLogs.reduce((s,l) => s+(l.cost||0), 0)
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">TOTAL GASTO</div><div class="stat-value" style="font-size:22px">R$${fmt(total)}</div><div class="stat-unit">todos os tempos</div></div>
+    <div class="stat-card"><div class="stat-label">EM ${yr}</div><div class="stat-value" style="font-size:22px">R$${fmt(yTotal)}</div><div class="stat-unit">${yLogs.length} manutenções</div></div>
+    <div class="stat-card"><div class="stat-label">REGISTROS</div><div class="stat-value">${logs.length}</div><div class="stat-unit">no total</div></div>
+    <div class="stat-card"><div class="stat-label">QUILOMETRAGEM</div><div class="stat-value" style="font-size:22px">${(db.km||0).toLocaleString('pt-BR')}</div><div class="stat-unit">km</div></div>`
+  const byType = {}, colors = {oleo:'#ffaa00',revisao:'#4ecdc4',pneu:'#ff6b35',ipva:'#a78bfa',funilaria:'#f9a8d4',outro:'#6b6b8a'}
+  logs.forEach(l => { byType[l.type] = (byType[l.type]||0) + (l.cost||0) })
+  const maxV = Math.max(...Object.values(byType), 1)
+  document.getElementById('stats-chart').innerHTML = Object.entries(byType).map(([type,v]) =>
+    `<div class="bar-row"><div class="bar-label">${TYPES[type]?.icon||''} ${TYPES[type]?.label||type}</div><div class="bar-track"><div class="bar-fill" style="width:${(v/maxV*100).toFixed(0)}%;background:${colors[type]||'#666'}"></div></div><div class="bar-val">R$${v.toFixed(0)}</div></div>`
+  ).join('') || '<div style="color:var(--muted);font-size:14px">Sem dados ainda</div>'
+  const byYear = {}
+  logs.forEach(l => { const y = new Date(l.date).getFullYear(); byYear[y] = (byYear[y]||0)+(l.cost||0) })
+  document.getElementById('stats-yearly').innerHTML = Object.entries(byYear).sort((a,b)=>b[0]-a[0]).map(([y,v]) =>
+    `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px">${y}</div><div style="font-family:'Space Mono',monospace;font-size:14px;color:var(--accent)">R$${v.toFixed(2).replace('.',',')}</div></div>`
+  ).join('') || '<div style="color:var(--muted);font-size:14px">Sem dados</div>'
+}
+function fmt(n) { return n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,'.') }
+
+// ── VEHICLE PAGE ───────────────────────────────────────────────
+function renderVehiclePage() {
+  const v = db.vehicle; if (!v) return
+  document.getElementById('vehicle-info-card').innerHTML = `
+    <div class="vehicle-info-row">
+      <div>
+        <div style="font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);margin-bottom:4px">SEU VEÍCULO</div>
+        <div class="vehicle-name">${v.model}</div>
+        <div style="font-size:14px;color:var(--muted);margin-top:4px">${v.year||''}</div>
+      </div>
+      ${v.plate ? `<div class="vehicle-plate">${v.plate}</div>` : ''}
+    </div>
+    <div style="font-family:'Space Mono',monospace;font-size:13px;color:var(--muted)">${db.logs.length} manutenções registradas</div>`
+  document.getElementById('account-chip').innerHTML = `<strong>CONTA</strong>${currentUser?.email||''}`
+  document.getElementById('edit-model').value = v.model
+  document.getElementById('edit-year').value  = v.year || ''
+  document.getElementById('edit-plate').value = v.plate || ''
+}
+
+async function saveVehicle() {
+  const model = document.getElementById('edit-model').value.trim()
+  if (!model) { showToast('Informe o modelo'); return }
+  db.vehicle = { model, year: document.getElementById('edit-year').value, plate: document.getElementById('edit-plate').value.trim().toUpperCase() }
+  await save(); renderHeader(); renderVehiclePage(); showToast('Veículo atualizado!')
+}
+
+async function confirmReset() {
+  if (!confirm('Apagar TODOS os dados? Esta ação não pode ser desfeita.')) return
+  db = { vehicle: null, km: 0, kmUpdatedAt: null, logs: [] }
+  await save(); showScreen('setup')
+}
+
+// ── TOAST ──────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast')
+  t.textContent = msg; t.classList.add('show')
+  setTimeout(() => t.classList.remove('show'), 2200)
+}
+
+// ── SERVICE WORKER ─────────────────────────────────────────────
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/autocare/sw.js').catch(()=>{})
+
+init()
+</script>
+</body>
+</html>
