@@ -305,6 +305,14 @@
         <div class="odo-sub" id="odo-sub">Toque para atualizar</div>
         <div class="odo-edit-hint">✏️ editar</div>
       </div>
+      <div id="push-banner" style="display:none;background:rgba(232,255,71,.08);border:1px solid rgba(232,255,71,.25);border-radius:16px;padding:14px 16px;margin-bottom:16px;align-items:center;gap:12px;cursor:pointer" onclick="requestPushPermission()">
+        <span style="font-size:20px">🔔</span>
+        <div style="flex:1">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px">Ativar notificações</div>
+          <div style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace">Receba alertas de manutenção</div>
+        </div>
+        <span style="font-size:12px;color:var(--accent);font-family:'Space Mono',monospace">ATIVAR →</span>
+      </div>
       <div class="section-title">ALERTAS</div>
       <div id="alerts-container"></div>
     </div>
@@ -437,6 +445,12 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging()
 
+async function requestPushPermission() {
+  const banner = document.getElementById('push-banner')
+  if (banner) banner.style.display = 'none'
+  await registerPush(currentUser.id)
+}
+
 async function registerPush(userId) {
   try {
     const permission = await Notification.requestPermission()
@@ -446,9 +460,10 @@ async function registerPush(userId) {
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg })
     if (!token) return
 
-    // Salva token no Supabase (ignora se já existe)
     await supabaseClient.from('push_tokens')
       .upsert({ user_id: userId, token }, { onConflict: 'user_id,token', ignoreDuplicates: true })
+
+    showToast('Notificações ativadas! 🔔')
   } catch (e) {
     console.warn('Push não disponível:', e.message)
   }
@@ -529,8 +544,11 @@ function showApp() {
   if (!db.vehicle) { showScreen('setup'); return }
   showScreen('app')
   renderApp()
-  // Pede permissão de push após login
-  if (currentUser) registerPush(currentUser.id)
+  // Mostra banner de notificação se ainda não foi concedida
+  if (currentUser && Notification.permission === 'default') {
+    const banner = document.getElementById('push-banner')
+    if (banner) banner.style.display = 'flex'
+  }
 }
 
 // ── AUTH ───────────────────────────────────────────────────────
