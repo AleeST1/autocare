@@ -442,7 +442,8 @@ async function registerPush(userId) {
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') return
 
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY })
+    const swReg = await navigator.serviceWorker.getRegistration('/autocare/firebase-messaging-sw.js')
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg })
     if (!token) return
 
     // Salva token no Supabase (ignora se já existe)
@@ -833,7 +834,10 @@ function showToast(msg) {
 }
 
 // ── SERVICE WORKER ─────────────────────────────────────────────
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/autocare/sw.js').catch(()=>{})
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/autocare/sw.js').catch(()=>{})
+  navigator.serviceWorker.register('/autocare/firebase-messaging-sw.js').catch(()=>{})
+}
 
 init()
 </script>
