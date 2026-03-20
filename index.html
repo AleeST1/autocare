@@ -384,6 +384,7 @@
           <div class="form-group"><label class="form-label">PLACA</label><input type="text" id="edit-plate" class="form-input" style="text-transform:uppercase"></div>
         </div>
         <button class="btn-primary" onclick="saveVehicle()">SALVAR ALTERAÇÕES</button>
+        <button class="btn-secondary" onclick="requestPushPermission()">🔔 Reativar notificações</button>
         <button class="btn-secondary" onclick="authLogout()">Sair da conta</button>
         <button class="btn-secondary" style="color:#ff6666;border-color:rgba(255,68,68,.3)" onclick="confirmReset()">🗑️ Apagar todos os dados</button>
         <div style="height:20px"></div>
@@ -456,31 +457,11 @@ async function registerPush(userId) {
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') return
 
-    // Registra e força ativação do Firebase SW
-    let swReg = await navigator.serviceWorker.getRegistration('/autocare/firebase-messaging-sw.js')
-    if (!swReg) {
-      swReg = await navigator.serviceWorker.register('/autocare/firebase-messaging-sw.js', {
-        scope: '/autocare/'
-      })
-    }
-
-    // Aguarda o SW ficar ativo
-    await new Promise(resolve => {
-      if (swReg.active) { resolve(); return }
-      const sw = swReg.installing || swReg.waiting
-      if (sw) {
-        sw.addEventListener('statechange', e => {
-          if (e.target.state === 'activated') resolve()
-        })
-      } else {
-        resolve()
-      }
-    })
-
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg })
+    // Firebase registra o SW dele automaticamente quando getToken é chamado
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY })
     if (!token) { console.warn('Token vazio'); return }
 
-    // Deleta token antigo e salva o novo
+    // Salva token novo (remove antigo primeiro)
     await supabaseClient.from('push_tokens').delete().eq('user_id', userId)
     await supabaseClient.from('push_tokens').insert({ user_id: userId, token })
 
@@ -876,7 +857,6 @@ function showToast(msg) {
 // ── SERVICE WORKER ─────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/autocare/sw.js').catch(()=>{})
-  navigator.serviceWorker.register('/autocare/firebase-messaging-sw.js').catch(()=>{})
 }
 
 init()
